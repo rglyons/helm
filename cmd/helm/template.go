@@ -61,6 +61,7 @@ To render just one template in a chart, use '-x':
 `
 
 type templateCmd struct {
+	namespace    string
 	valueFiles   valueFiles
 	chartPath    string
 	out          io.Writer
@@ -68,6 +69,7 @@ type templateCmd struct {
 	stringValues []string
 	nameTemplate string
 	showNotes    bool
+	ignoreEmpty  bool
 	releaseName  string
 	renderFiles  []string
 	kubeVersion  string
@@ -88,6 +90,7 @@ func newTemplateCmd(out io.Writer) *cobra.Command {
 	}
 
 	f := cmd.Flags()
+	f.BoolVar(&t.ignoreEmpty, "ignore-empty", false, "do not output empty YAML objects")
 	f.BoolVar(&t.showNotes, "notes", false, "show the computed NOTES.txt file as well")
 	f.StringVarP(&t.releaseName, "name", "", "RELEASE-NAME", "release name")
 	f.StringArrayVarP(&t.renderFiles, "execute", "x", []string{}, "only execute the given templates")
@@ -221,7 +224,7 @@ func (t *templateCmd) run(cmd *cobra.Command, args []string) error {
 		if len(match) == 2 {
 			h = strings.TrimSpace(match[1])
 		}
-		m := tiller.Manifest{Name: k, Content: v, Head: &util.SimpleHead{Kind: h}}
+		m := tiller.Manifest{Name: k, Content: strings.TrimSpace(v), Head: &util.SimpleHead{Kind: h}}
 		listManifests = append(listManifests, m)
 	}
 	in := func(needle string, haystack []string) bool {
@@ -258,6 +261,10 @@ func (t *templateCmd) run(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		if strings.HasPrefix(b, "_") {
+			continue
+		}
+		// don't output empty objects if flag is enabled
+		if t.ignoreEmpty && len(data) == 0 {
 			continue
 		}
 
